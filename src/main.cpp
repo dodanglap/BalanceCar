@@ -26,7 +26,7 @@ Preferences preferences;
 MPU6050Helper mpuHelper;
 
 int speed_pwm;
-int value_max_speed = 40;
+int value_max_speed = 100;
 float value_max_kpid =  150;
 int state = 0;
 int state_old = state;
@@ -322,33 +322,33 @@ void loop() {
         if (pid_output > 0) {
             pid_output = pid.constrainOutput(0, speed_crt);
             if (state_run1 == 0){
-              Motor1.run_forward(75);  // Động cơ quay tiến với tốc độ `pid_output`.
-              Motor2.run_forward(75);
+              Motor1.run_forward(150);  // Động cơ quay tiến với tốc độ `pid_output`.
+              Motor2.run_forward(150);
               state_run1 = 1;
               state_run2 = 0;
               delay(200);
             }
             
 
-            Motor1.run_forward(40);  // Động cơ quay tiến với tốc độ `pid_output`.
-            Motor2.run_forward(40);
+            Motor1.run_forward(speed_crt);  // Động cơ quay tiến với tốc độ `pid_output`.
+            Motor2.run_forward(speed_crt);
         } else {
             pid_output = pid.constrainOutput(-speed_crt,0);
             if (state_run2 == 0){
-              Motor1.run_backward(75);  // Động cơ quay tiến với tốc độ `pid_output`.
-              Motor2.run_backward(75);
+              Motor1.run_backward(150);  // Động cơ quay tiến với tốc độ `pid_output`.
+              Motor2.run_backward(150);
               state_run2 = 1;
               state_run1 = 0;
               delay(200);
             }
             
 
-            Motor1.run_backward(60); // Động cơ quay lùi với tốc độ `-pid_output`.
-            Motor2.run_backward(60);
+            Motor1.run_backward(speed_crt); // Động cơ quay lùi với tốc độ `-pid_output`.
+            Motor2.run_backward(speed_crt);
         }
         
         Serial.println(pid_output);
-        change_state();
+        
       }
       
       
@@ -357,7 +357,7 @@ void loop() {
         Serial.println(recvDataBLT);
         recvDataBLT = "";
     }
-    
+    change_state();
     
   }
   else if (state == 1){
