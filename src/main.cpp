@@ -18,6 +18,7 @@
 #define btn_submit 4
 #define btn_increase 16
 #define btn_decrease 17
+#define led_demo 2
 
 BluetoothSerial SerialBT;
 DriveMotor Motor1, Motor2;
@@ -42,7 +43,7 @@ String recvDataBLT;
 int state_config_mpu;
 float ax, ay, az, gx, gy, gz, temp;
 sensors_event_t a,g,t;
-float angle;
+int angle;
 unsigned long lastTimeMPU, crtState1, crtState2, crtState3, crtState4;
 float dt;
 int state_run1, state_run2 = 0;
@@ -238,7 +239,7 @@ float getAngle(float ax, float ay, float az, float gx, float gy, float gz, float
 
   // Tích hợp tốc độ góc để tính góc từ con quay
   gyroRate = gx / para_range; // 131.0 là giá trị chia của con quay (tùy theo config)
-  angle = 0.95 * (angle + gyroRate * dt) + 0.05 * accelAngle;
+  angle = 0.9 * (angle + gyroRate * dt) + 0.1 * accelAngle;
 
   return angle;
 }
@@ -256,6 +257,8 @@ void setup() {
     pinMode(btn_decrease, INPUT);
     pinMode(btn_increase, INPUT);
     pinMode(btn_submit, INPUT);
+
+    pinMode(led_demo, OUTPUT);
 
 
     Serial.begin(9600);
@@ -282,7 +285,7 @@ void setup() {
 void loop() {
   if (state == 0){
     recvDataBLT = receive_data_BLT();
-    if (recvDataBLT.length() == 0){
+    if (recvDataBLT.length() <= 1){
       if (begin_signal == 0){
       
         speed_crt = readDataToEEPROM(numberAdd[0]);
@@ -297,65 +300,151 @@ void loop() {
         lcd.print(str_print1);
         lcd.setCursor(0,1);
         lcd.print(str_print2);
-        
-        
-        
         begin_signal = 1;
       
       }
+      else{
       // MPU
-      unsigned long currentTimeMPU = millis(); // Thời gian hiện tại (ms)
-      dt = (currentTimeMPU - lastTimeMPU); // Chuyển sang giây
-      if (dt >= 1000){
-        lastTimeMPU = currentTimeMPU; // Cập nhật thời gian lần trước
-        dt = dt/1000;
-        mpuHelper.getAllMPU(ax, ay, az, gx, gy, gz, temp);
-        angle = getAngle(ax, ay, az, gx, gy, gz, dt, angle, 65.5);
-        Serial.println("Angle o");
-        Serial.println(angle);
-        PID pid(kp_crt, ki_crt, kd_crt);
-        pid.setSetpoint(0.00);
-        int pid_output = (int) pid.compute(angle, dt); // Tính toán tín hiệu điều khiển
-        Serial.println("PID");
-           // Giới hạn giá trị đầu ra
-        
-        if (pid_output > 0) {
-            pid_output = pid.constrainOutput(0, speed_crt);
-            if (state_run1 == 0){
-              Motor1.run_forward(150);  // Động cơ quay tiến với tốc độ `pid_output`.
-              Motor2.run_forward(150);
-              state_run1 = 1;
-              state_run2 = 0;
-              delay(200);
-            }
-            
+        unsigned long currentTimeMPU = millis(); // Thời gian hiện tại (ms)
+        dt = (currentTimeMPU - lastTimeMPU); // Chuyển sang giây
+        if (dt >= 1000){
+          lastTimeMPU = currentTimeMPU; // Cập nhật thời gian lần trước
+          dt = dt/1000;
+          mpuHelper.getAllMPU(ax, ay, az, gx, gy, gz, temp);
+          angle = (int)getAngle(ax, ay, az, gx, gy, gz, dt, angle, 65.5);
+          Serial.println("Angle o");
+          Serial.println(angle);
+          PID pid(kp_crt, ki_crt, kd_crt);
+          pid.setSetpoint(0.00);
+          int pid_output = (int) pid.compute(angle, dt); // Tính toán tín hiệu điều khiển
+          Serial.println("PID");
+          Serial.println(pid_output);
+            // Giới hạn giá trị đầu ra
+          
+          if (pid_output > 0) {
+              if (state_run1 == 0){
+                Motor1.run_forward(130);  // Động cơ quay tiến với tốc độ `pid_output`.
+                Motor2.run_forward(130);
+                state_run1 = 1;
+                state_run2 = 0;
+                delay(200);
+              }
+              Motor1.run_forward(speed_crt);  // Động cơ quay tiến với tốc độ `pid_output`.
+              Motor2.run_forward(speed_crt);
+          } else {
 
-            Motor1.run_forward(speed_crt);  // Động cơ quay tiến với tốc độ `pid_output`.
-            Motor2.run_forward(speed_crt);
-        } else {
-            pid_output = pid.constrainOutput(-speed_crt,0);
-            if (state_run2 == 0){
-              Motor1.run_backward(150);  // Động cơ quay tiến với tốc độ `pid_output`.
-              Motor2.run_backward(150);
-              state_run2 = 1;
-              state_run1 = 0;
-              delay(200);
-            }
-            
+              if (state_run2 == 0){
+                Motor1.run_backward(130);  // Động cơ quay tiến với tốc độ `pid_output`.
+                Motor2.run_backward(130);
+                state_run2 = 1;
+                state_run1 = 0;
+                delay(200);
+              }
+              
 
-            Motor1.run_backward(speed_crt); // Động cơ quay lùi với tốc độ `-pid_output`.
-            Motor2.run_backward(speed_crt);
+              Motor1.run_backward(speed_crt); // Động cơ quay lùi với tốc độ `-pid_output`.
+              Motor2.run_backward(speed_crt);
+          }
+          
+          
+          
         }
-        
-        Serial.println(pid_output);
-        
       }
       
       
     }
     else {
-        Serial.println(recvDataBLT);
-        recvDataBLT = "";
+
+        // xử lý dữ liệu khi có tín hiệu tới
+        String oldRcv = recvDataBLT;
+        Serial.println(oldRcv);
+        if (oldRcv.indexOf("UP1") != -1 and oldRcv.length() == 4){
+          while (oldRcv.indexOf("UP1") != -1){
+          Serial.println("Đi thẳng");
+          digitalWrite(led_demo, 1);
+          String newrcv = receive_data_BLT();
+          if (find_string(newrcv, oldRcv) == false){
+            oldRcv = newrcv;
+            Serial.println("New RECV: ");
+            Serial.println(newrcv);
+            Serial.println("Old RECV: ");
+            Serial.println(oldRcv);
+            break;
+          }
+
+          }
+        }
+        if (oldRcv.indexOf("DOWN1") != -1 and oldRcv.length() == 6){
+          while(oldRcv.indexOf("DOWN1") != -1){
+            Serial.println("Đi lùi");
+            digitalWrite(led_demo, 1);
+            String newrcv = receive_data_BLT();
+            if (find_string(newrcv, oldRcv) == false){
+              oldRcv = newrcv;
+              Serial.println("New RECV: ");
+              Serial.println(newrcv);
+              Serial.println("Old RECV: ");
+              Serial.println(oldRcv);
+              break;
+            }
+          }
+        }
+        if (oldRcv.indexOf("RIGHT1") != -1 and oldRcv.length() == 7){
+            while (oldRcv.indexOf("RIGHT1") != -1){
+            Serial.println("Quạch phải");
+            digitalWrite(led_demo, 1);
+            String newrcv = receive_data_BLT();
+            if (find_string(newrcv, oldRcv) == false){
+              oldRcv = newrcv;
+              Serial.println("New RECV: ");
+              Serial.println(newrcv);
+              Serial.println("Old RECV: ");
+              Serial.println(oldRcv);
+              break;
+            }
+          }
+        }
+        if (oldRcv.indexOf("LEFT1") != -1 and oldRcv.length() == 6){
+          while(oldRcv.indexOf("LEFT1") != -1){
+            Serial.println("Quạch trái");
+            digitalWrite(led_demo, 1);
+            String newrcv = receive_data_BLT();
+            if (find_string(newrcv, oldRcv) == false){
+              oldRcv = newrcv;
+              Serial.println("New RECV: ");
+              Serial.println(newrcv);
+              Serial.println("Old RECV: ");
+              Serial.println(oldRcv);
+              break;
+            }
+          }
+        }      
+        else{
+          digitalWrite(led_demo, 0);
+        }  
+        // speed200
+        if(oldRcv.indexOf("Speed") != -1){
+          Serial.println("Cập nhật Speed");
+          digitalWrite(led_demo, 1);
+        }
+        else if(oldRcv.indexOf("Kp") != -1){
+          Serial.println("Cập nhật kp");
+          digitalWrite(led_demo, 1);
+        }
+        else if (oldRcv.indexOf("Kd") != -1){
+          Serial.println("Cập nhật kd");
+          digitalWrite(led_demo, 1);
+        }
+        else if(oldRcv.indexOf("Ki") != -1){
+          Serial.println("Cập nhật ki");
+          digitalWrite(led_demo, 1);
+        }
+        else{
+          digitalWrite(led_demo, 0);
+        }
+        
+        
+
     }
     change_state();
     
