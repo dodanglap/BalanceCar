@@ -263,8 +263,8 @@ float get_value_pid_blt(String data_k){
     if (isdigit(data_k[i])){
       number += data_k[i];
     }
-    if (data_k[i] == '.'){
-      number += data_k[i];
+    if (data_k[i] == ','){
+      number += '.';
     }
   }
   float value = number.toFloat();
@@ -272,31 +272,74 @@ float get_value_pid_blt(String data_k){
 }
 
 
-void process_cmd_blt(String data_cmd){
+String process_cmd_blt(String data_cmd){
+  Serial.println(data_cmd);
   if ((data_cmd.lastIndexOf("UP-RIGHT\n") != -1 || data_cmd.lastIndexOf("RIGHT-UP\n") != -1) && data_cmd.length() == 9) {
     Serial.println("Di thang cheo phai");
+    return data_cmd;
   }
   if ((data_cmd.lastIndexOf("UP-LEFT\n") != -1 || data_cmd.lastIndexOf("LEFT-UP\n") != -1) && data_cmd.length() == 8) {
       Serial.println("Di thang cheo trai");
+      return data_cmd;
   }
   if ((data_cmd.lastIndexOf("DOWN-RIGHT\n") != -1 || data_cmd.lastIndexOf("RIGHT-DOWN\n") != -1) && data_cmd.length() == 11) {
       Serial.println("Di xuong cheo phai");
+      return data_cmd;
   }
   if ((data_cmd.lastIndexOf("DOWN-LEFT\n") != -1 || data_cmd.lastIndexOf("LEFT-DOWN\n") != -1) && data_cmd.length() == 10) {
       Serial.println("Di xuong cheo trai");
+      return data_cmd;
   }
   if (data_cmd.lastIndexOf("LEFT\n") != -1 && data_cmd.length() == 5) {
       Serial.println("Quach trai");
+      return data_cmd;
   }
   if (data_cmd.lastIndexOf("RIGHT\n") != -1 && data_cmd.length() == 6) {
       Serial.println("Quach phai");
+      return data_cmd;
   }
   if (data_cmd.lastIndexOf("DOWN\n") != -1 && data_cmd.length() == 5) {
       Serial.println("Di xuong");
+      return data_cmd;
   }
   if (data_cmd.lastIndexOf("UP\n") != -1 && data_cmd.length() == 3) {
       Serial.println("Di thang");
+      return data_cmd;
   }
+
+  if(data_cmd.indexOf("Kp") != -1 && data_cmd.length() > 2){
+    Serial.println("Cap nhat Kp");
+    begin_signal = 0;
+    // lay gia tri speed
+    float kp_new = get_value_pid_blt(data_cmd);
+    Serial.println(kp_new);
+    writeDataToEEPROM(numberAdd[1], kp_new);
+    return "";
+  }
+
+  else if(data_cmd.indexOf("Kd") != -1 && data_cmd.length() > 2){
+    Serial.println("Cap nhat Kd");
+    begin_signal = 0;
+    // lay gia tri speed
+    float kd_new = get_value_pid_blt(data_cmd);
+    Serial.println(kd_new);
+    writeDataToEEPROM(numberAdd[2], kd_new);
+    return "";
+  }
+
+  else if(data_cmd.indexOf("Ki") != -1 && data_cmd.length() > 2){
+    Serial.println("Cap nhat Ki");
+    begin_signal = 0;
+    // lay gia tri speed
+    float ki_new = get_value_pid_blt(data_cmd);
+    Serial.println(ki_new);
+    writeDataToEEPROM(numberAdd[3], ki_new);
+    return "";
+  }
+  else{
+    return "";
+  }
+  
 
   
 
@@ -336,16 +379,22 @@ void setup() {
     Wire.begin();
 }
 
-
-
-
-
 void loop() {
   if (state == 0){
     recvDataBLT = receive_data_BLT();
-    if (recvDataBLT.length() > 1){
+    Serial.println("Do dai recv: ");
+    Serial.println(recvDataBLT.length());
+    if (recvDataBLT.length() > 2){
       old_data_rcv = recvDataBLT;
+      
     }
+    if (old_data_rcv.length() > 1){
+      old_data_rcv = process_cmd_blt(old_data_rcv);
+    }
+
+    Serial.println("Do dai old: ");
+    Serial.println(old_data_rcv.length());
+    
     if (begin_signal == 0){
     
       speed_crt = readDataToEEPROM(numberAdd[0]);
@@ -409,7 +458,7 @@ void loop() {
       
       
     }
-    process_cmd_blt(old_data_rcv);
+    
 
     change_state();
     
