@@ -48,6 +48,8 @@ unsigned long lastTimeMPU, crtState1, crtState2, crtState3, crtState4;
 float dt;
 int state_run1, state_run2 = 0;
 String old_data_rcv;
+float setpoint = 0.00;
+int pid_output;
 
 void writeDataToEEPROM(int address, const char* data);
 String readDataToEEPROM(int address);
@@ -272,38 +274,66 @@ float get_value_pid_blt(String data_k){
 }
 
 
-String process_cmd_blt(String data_cmd){
+String process_cmd_blt(String data_cmd, int pid_output){
   Serial.println(data_cmd);
   if ((data_cmd.lastIndexOf("UP-RIGHT\n") != -1 || data_cmd.lastIndexOf("RIGHT-UP\n") != -1) && data_cmd.length() == 9) {
     Serial.println("Di thang cheo phai");
+    setpoint = 1;
+    // Motor1 = speedcrt, Mootor2 = 50%speedcrt
+    Motor1.run_forward(speed_crt);
+    Motor2.run_forward(speed_crt - 40);
     return data_cmd;
   }
   if ((data_cmd.lastIndexOf("UP-LEFT\n") != -1 || data_cmd.lastIndexOf("LEFT-UP\n") != -1) && data_cmd.length() == 8) {
       Serial.println("Di thang cheo trai");
+      setpoint = 1;
+
+      Motor1.run_forward(speed_crt-40);
+      Motor2.run_forward(speed_crt);
       return data_cmd;
   }
   if ((data_cmd.lastIndexOf("DOWN-RIGHT\n") != -1 || data_cmd.lastIndexOf("RIGHT-DOWN\n") != -1) && data_cmd.length() == 11) {
       Serial.println("Di xuong cheo phai");
+      setpoint = -1;
+
+      Motor1.run_backward(speed_crt);
+      Motor2.run_backward(speed_crt - 40);
       return data_cmd;
   }
   if ((data_cmd.lastIndexOf("DOWN-LEFT\n") != -1 || data_cmd.lastIndexOf("LEFT-DOWN\n") != -1) && data_cmd.length() == 10) {
       Serial.println("Di xuong cheo trai");
+      setpoint = -1;
+
+      Motor1.run_backward(speed_crt-40);
+      Motor2.run_backward(speed_crt);
       return data_cmd;
   }
   if (data_cmd.lastIndexOf("LEFT\n") != -1 && data_cmd.length() == 5) {
       Serial.println("Quach trai");
+      setpoint = 1;
+
+      Motor1.run_forward(45);
+      Motor2.run_forward(speed_crt);
       return data_cmd;
   }
   if (data_cmd.lastIndexOf("RIGHT\n") != -1 && data_cmd.length() == 6) {
       Serial.println("Quach phai");
+      setpoint = 1;
+
+      Motor1.run_forward(speed_crt);
+      Motor2.run_forward(45);
       return data_cmd;
   }
   if (data_cmd.lastIndexOf("DOWN\n") != -1 && data_cmd.length() == 5) {
       Serial.println("Di xuong");
+      Motor1.run_backward(speed_crt);
+      Motor2.run_backward(speed_crt);
       return data_cmd;
   }
   if (data_cmd.lastIndexOf("UP\n") != -1 && data_cmd.length() == 3) {
       Serial.println("Di thang");
+      Motor1.run_forward(speed_crt);
+      Motor2.run_forward(speed_crt);
       return data_cmd;
   }
 
@@ -337,6 +367,32 @@ String process_cmd_blt(String data_cmd){
     return "";
   }
   else{
+    Serial.println("Xe can bang tai cho");
+    setpoint = 0;
+    if (pid_output > 0) {
+          if (state_run1 == 0){
+            Motor1.run_forward(130);  // Động cơ quay tiến với tốc độ `pid_output`.
+            Motor2.run_forward(130);
+            state_run1 = 1;
+            state_run2 = 0;
+            delay(200);
+          }
+          Motor1.run_forward(speed_crt);  // Động cơ quay tiến với tốc độ `pid_output`.
+          Motor2.run_forward(speed_crt);
+      } else {
+
+      if (state_run2 == 0){
+        Motor1.run_backward(130);  // Động cơ quay tiến với tốc độ `pid_output`.
+        Motor2.run_backward(130);
+        state_run2 = 1;
+        state_run1 = 0;
+        delay(200);
+      }
+      
+
+      Motor1.run_backward(speed_crt); // Động cơ quay lùi với tốc độ `-pid_output`.
+      Motor2.run_backward(speed_crt);
+      }
     return "";
   }
   
@@ -381,19 +437,8 @@ void setup() {
 
 void loop() {
   if (state == 0){
-    recvDataBLT = receive_data_BLT();
-    Serial.println("Do dai recv: ");
-    Serial.println(recvDataBLT.length());
-    if (recvDataBLT.length() > 2){
-      old_data_rcv = recvDataBLT;
-      
-    }
-    if (old_data_rcv.length() > 1){
-      old_data_rcv = process_cmd_blt(old_data_rcv);
-    }
+    
 
-    Serial.println("Do dai old: ");
-    Serial.println(old_data_rcv.length());
     
     if (begin_signal == 0){
     
@@ -424,40 +469,23 @@ void loop() {
       Serial.println("Angle o");
       Serial.println(angle);
       PID pid(kp_crt, ki_crt, kd_crt);
-      pid.setSetpoint(0.00);
-      int pid_output = (int) pid.compute(angle, dt); // Tính toán tín hiệu điều khiển
+      pid.setSetpoint(setpoint);
+      pid_output = (int) pid.compute(angle, dt); // Tính toán tín hiệu điều khiển
+      Serial.println("Setpoint: ");
+      Serial.println(setpoint);
       Serial.println("PID");
       Serial.println(pid_output);
         // Giới hạn giá trị đầu ra
-      
-      if (pid_output > 0) {
-          if (state_run1 == 0){
-            Motor1.run_forward(130);  // Động cơ quay tiến với tốc độ `pid_output`.
-            Motor2.run_forward(130);
-            state_run1 = 1;
-            state_run2 = 0;
-            delay(200);
-          }
-          Motor1.run_forward(speed_crt);  // Động cơ quay tiến với tốc độ `pid_output`.
-          Motor2.run_forward(speed_crt);
-      } else {
 
-          if (state_run2 == 0){
-            Motor1.run_backward(130);  // Động cơ quay tiến với tốc độ `pid_output`.
-            Motor2.run_backward(130);
-            state_run2 = 1;
-            state_run1 = 0;
-            delay(200);
-          }
-          
-
-          Motor1.run_backward(speed_crt); // Động cơ quay lùi với tốc độ `-pid_output`.
-          Motor2.run_backward(speed_crt);
-      }
-      
-      
+    }
+    recvDataBLT = receive_data_BLT();
+    if (recvDataBLT.length() > 2){
+      old_data_rcv = recvDataBLT;
       
     }
+
+    old_data_rcv = process_cmd_blt(old_data_rcv, pid_output);
+    
     
 
     change_state();
