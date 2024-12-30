@@ -273,9 +273,66 @@ float get_value_pid_blt(String data_k){
   return value;
 }
 
+// Khi gửi bị nhiều lệnh 1 lúc
+boolean check_cmd(String str_data){
+  int arr_n[10];
+  int n_index = 0;
+  int leng_arr = 0;
+  // Lấy vị trí ký tự xuống dòng '\n'
+  for (int i = 0; i < str_data.length(); i++) {
+    if (str_data[i] == '\n') {
+      Serial.println(i);
+      arr_n[n_index] = i;
+      n_index++;
+    }
+  }
+  Serial.println(n_index);
+  // Nếu có ít nhất hai dấu '\n' thì mới thực hiện lấy chuỗi con
+  if (n_index > 1 && n_index<9) {
+    return true;
+  }
+  else{
+    return false;
+  }
+}
+String process_long_cmd(String str_data) {
+  int arr_n[10];
+  int n_index = 0;
+  int leng_arr = 0;
+  // Lấy vị trí ký tự xuống dòng '\n'
+  for (int i = 0; i < str_data.length(); i++) {
+    if (str_data[i] == '\n') {
+      Serial.println(i);
+      arr_n[n_index] = i;
+      n_index++;
+    }
+  }
+  Serial.println(n_index);
+  // Nếu có ít nhất hai dấu '\n' thì mới thực hiện lấy chuỗi con
+  if (n_index > 1 && n_index<9) {
+    String new_data="";
+    Serial.println("Cắt chuỗi");
+    // Lấy chuỗi từ vị trí sau dấu '\n' thứ n_index-1 đến vị trí dấu '\n' thứ n_index
+    int start = arr_n[n_index -2]+1;
+    int end = arr_n[n_index-1];
+    for (int i = start; i<= end; i++){
+      new_data += str_data[i];
+    }
+    return new_data;
+  } else {
+    // Trả về chuỗi rỗng nếu không đủ dấu '\n'
+    return "";
+  }
+}
+
 
 String process_cmd_blt(String data_cmd, int pid_output){
   Serial.println(data_cmd);
+  if (check_cmd(data_cmd) == true){
+    data_cmd = process_long_cmd(data_cmd);
+    Serial.println("New: ");
+    Serial.println(data_cmd);
+  }
   if ((data_cmd.lastIndexOf("UP-RIGHT\n") != -1 || data_cmd.lastIndexOf("RIGHT-UP\n") != -1) && data_cmd.length() == 9) {
     Serial.println("Di thang cheo phai");
     setpoint = 1;
@@ -337,7 +394,7 @@ String process_cmd_blt(String data_cmd, int pid_output){
       return data_cmd;
   }
 
-  if(data_cmd.indexOf("Kp") != -1 && data_cmd.length() > 2){
+  if(data_cmd.indexOf("Kp") != -1 && data_cmd.length() > 2 && data_cmd.indexOf("Ki") == -1 && data_cmd.indexOf("Kd") == -1){
     Serial.println("Cap nhat Kp");
     begin_signal = 0;
     // lay gia tri speed
@@ -347,7 +404,7 @@ String process_cmd_blt(String data_cmd, int pid_output){
     return "";
   }
 
-  else if(data_cmd.indexOf("Kd") != -1 && data_cmd.length() > 2){
+  else if(data_cmd.indexOf("Kd") != -1 && data_cmd.length() > 2 && data_cmd.indexOf("Ki") == -1 && data_cmd.indexOf("Kp") == -1){
     Serial.println("Cap nhat Kd");
     begin_signal = 0;
     // lay gia tri speed
@@ -357,7 +414,7 @@ String process_cmd_blt(String data_cmd, int pid_output){
     return "";
   }
 
-  else if(data_cmd.indexOf("Ki") != -1 && data_cmd.length() > 2){
+  else if(data_cmd.indexOf("Ki") != -1 && data_cmd.length() > 2 && data_cmd.indexOf("Kd") == -1 && data_cmd.indexOf("Kp") == -1){
     Serial.println("Cap nhat Ki");
     begin_signal = 0;
     // lay gia tri speed
@@ -366,7 +423,16 @@ String process_cmd_blt(String data_cmd, int pid_output){
     writeDataToEEPROM(numberAdd[3], ki_new);
     return "";
   }
-  else{
+  else if(data_cmd.indexOf("Speed") != -1 && data_cmd.length() > 2 && data_cmd.indexOf("Kp") == -1 && data_cmd.indexOf("Kd") == -1 && data_cmd.indexOf("Ki") == -1){
+    Serial.println("Cap nhat Speed");
+    begin_signal = 0;
+    // lay gia tri speed
+    float sp_new = get_value_speed_btl(data_cmd);
+    Serial.println(sp_new);
+    writeDataToEEPROM(numberAdd[0], sp_new);
+    return "";
+  }
+  else if (data_cmd.indexOf("Stop")){
     Serial.println("Xe can bang tai cho");
     setpoint = 0;
     if (pid_output > 0) {
@@ -393,6 +459,7 @@ String process_cmd_blt(String data_cmd, int pid_output){
       Motor1.run_backward(speed_crt); // Động cơ quay lùi với tốc độ `-pid_output`.
       Motor2.run_backward(speed_crt);
       }
+  
     return "";
   }
   
@@ -477,14 +544,16 @@ void loop() {
       Serial.println(pid_output);
         // Giới hạn giá trị đầu ra
 
-    }
-    recvDataBLT = receive_data_BLT();
-    if (recvDataBLT.length() > 2){
-      old_data_rcv = recvDataBLT;
-      
-    }
+      recvDataBLT = receive_data_BLT();
+      if (recvDataBLT.length() > 2){
+        old_data_rcv = recvDataBLT;
+        
+      }
 
-    old_data_rcv = process_cmd_blt(old_data_rcv, pid_output);
+      old_data_rcv = process_cmd_blt(old_data_rcv, pid_output);
+
+    }
+    
     
     
 
